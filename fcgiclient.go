@@ -123,7 +123,6 @@ func New(h string, args ...interface{}) (fcgi *FCGIClient, err error) {
 		addr := h + ":" + strconv.FormatInt(int64(args[0].(int)), 10)
 		conn, err = net.Dial("tcp", addr)
 	case string:
-		addr := h + ":" + args[0].(string)
 		conn, err = net.Dial("unix", addr)
 	default:
 		err = errors.New("fcgi: we only accept int (port) or string (socket) params.")
