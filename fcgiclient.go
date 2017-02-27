@@ -2,17 +2,20 @@
 // Use of this source code is governed by a BSD-style
 // Part of source code is from Go fcgi package
 
+// Fix bug: Can't receive more than 1 record untill FCGI_END_REQUEST 2012-09-15
+// By: wofeiwo
+
 package fcgiclient
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"sync"
 	"errors"
 	"io"
 	"net"
 	"strconv"
+	"sync"
 )
 
 const FCGI_LISTENSOCK_FILENO uint8 = 0
@@ -108,7 +111,7 @@ type FCGIClient struct {
 	mutex     sync.Mutex
 	rwc       io.ReadWriteCloser
 	h         header
-	buf 	  bytes.Buffer
+	buf       bytes.Buffer
 	keepAlive bool
 }
 
@@ -135,7 +138,7 @@ func New(h string, args ...interface{}) (fcgi *FCGIClient, err error) {
 	return
 }
 
-func (this *FCGIClient) writeRecord(recType uint8, reqId uint16, content []byte) ( err error) {
+func (this *FCGIClient) writeRecord(recType uint8, reqId uint16, content []byte) (err error) {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
 	this.buf.Reset()
@@ -184,7 +187,6 @@ func (this *FCGIClient) writePairs(recType uint8, reqId uint16, pairs map[string
 	w.Close()
 	return nil
 }
-
 
 func readSize(s []byte) (uint32, int) {
 	if len(s) == 0 {
@@ -269,11 +271,12 @@ func (w *streamWriter) Close() error {
 	return w.c.writeRecord(w.recType, w.reqId, nil)
 }
 
-func (this *FCGIClient) Request(env map[string]string, reqStr string) (ret []byte, err error) {
+func (this *FCGIClient) Request(env map[string]string, reqStr string) (retout []byte, reterr []byte, err error) {
 
 	var reqId uint16 = 1
+	defer this.rwc.Close()
 
-	err = this.writeBeginRequest(reqId, uint16(FCGI_RESPONDER), 0)	
+	err = this.writeBeginRequest(reqId, uint16(FCGI_RESPONDER), 0)
 	if err != nil {
 		return
 	}
@@ -288,14 +291,29 @@ func (this *FCGIClient) Request(env map[string]string, reqStr string) (ret []byt
 		}
 	}
 
-
 	rec := &record{}
-	err = rec.read(this.rwc)
-	if err != nil {
-		return
-	}
+	var err1 error
 
-	ret = rec.content()
+	// recive untill EOF or FCGI_END_REQUEST
+	for {
+		err1 = rec.read(this.rwc)
+		if err1 != nil {
+			if err1 != io.EOF {
+				err = err1
+			}
+			break
+		}
+		switch {
+		case rec.h.Type == FCGI_STDOUT:
+			retout = append(retout, rec.content()...)
+		case rec.h.Type == FCGI_STDERR:
+			reterr = append(reterr, rec.content()...)
+		case rec.h.Type == FCGI_END_REQUEST:
+			fallthrough
+		default:
+			break
+		}
+	}
 
 	return
 }
