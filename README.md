@@ -1,6 +1,10 @@
 # go-fastcgi-client
 Automatically exported from code.google.com/p/go-fastcgi-client
 
+This repo is for archive only.
+
+A better one, see https://github.com/tomasen/fcgi_client
+
 # Purpose
 This package is useful if you want to call some script (eg. php) from Go. Instead of invoking it via CLI, you can invoke it through FastCGI (php-fpm). 
 
